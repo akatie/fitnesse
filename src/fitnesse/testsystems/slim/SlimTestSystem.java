@@ -15,6 +15,7 @@ import fitnesse.testsystems.*;
 import fitnesse.testsystems.slim.results.SlimExceptionResult;
 import fitnesse.testsystems.slim.tables.SlimAssertion;
 import fitnesse.testsystems.slim.tables.SlimTable;
+import fitnesse.wiki.PageData;
 
 import static fitnesse.slim.SlimServer.*;
 
@@ -24,7 +25,8 @@ public abstract class SlimTestSystem implements TestSystem {
   private final String testSystemName;
 
   private SlimTestContextImpl testContext;
-  boolean stopTestCalled;
+  private boolean stopTestCalled;
+  private boolean ignoreAllTestsCalled;
   private boolean stopSuiteCalled;
   private boolean testSystemIsStopped;
 
@@ -59,6 +61,9 @@ public abstract class SlimTestSystem implements TestSystem {
     } catch (IOException e) {
       stopTestSystem(e);
       throw new UnableToStartException("Could not start test system", e);
+    } catch (Exception e) {
+      stopTestSystem(e);
+      throw e;
     }
     testSystemListener.testSystemStarted(this);
   }
@@ -99,9 +104,10 @@ public abstract class SlimTestSystem implements TestSystem {
     testSystemListener.addTestSystemListener(listener);
   }
 
-  private void initializeTest(TestPage testPage) {
+  protected void initializeTest(TestPage testPage) {
     testContext = createTestContext(testPage);
     stopTestCalled = false;
+    ignoreAllTestsCalled = false;
   }
 
   protected SlimTestContextImpl createTestContext(TestPage testPage) {
@@ -115,8 +121,13 @@ public abstract class SlimTestSystem implements TestSystem {
     final Map<String, Object> instructionResults;
     if (stopTestCalled && !table.isTearDown()) {
       instructionResults = Collections.emptyMap();
+    } else if (ignoreAllTestsCalled && !table.isTearDown()){
+      instructionResults = Collections.emptyMap();
     } else {
       boolean tearDownOfAlreadyStartedTest = stopTestCalled && table.isTearDown();
+      if(ignoreAllTestsCalled && table.isTearDown()){
+        ignoreAllTestsCalled = false;
+      }
       if (stopSuiteCalled && !isSuiteTearDownPage && !tearDownOfAlreadyStartedTest) {
         instructionResults = Collections.emptyMap();
       } else {
@@ -128,21 +139,39 @@ public abstract class SlimTestSystem implements TestSystem {
   }
 
   protected void evaluateTables(List<SlimAssertion> assertions, Map<String, Object> instructionResults) throws SlimCommunicationException {
+    boolean IgnoreTestTable = false;
     for (SlimAssertion a : assertions) {
       final String key = a.getInstruction().getId();
-      final Object returnValue = instructionResults.get(key);
+      Object returnValue = instructionResults.get(key);
+
+      //Ignore management
+      if(!ignoreAllTestsCalled) {
+        if (returnValue != null && returnValue.toString().contains(EXCEPTION_IGNORE_ALL_TESTS_TAG)) {
+          ignoreAllTestsCalled = IgnoreTestTable = true;
+        } else if (returnValue != null && returnValue.toString().contains(EXCEPTION_IGNORE_SCRIPT_TEST_TAG)) {
+          IgnoreTestTable = true;
+        } else if (IgnoreTestTable) {
+          returnValue = "IGNORE_SCRIPT_TEST";
+        }
+      } else {
+        returnValue = "IGNORE_SCRIPT_TEST";
+      }
       //Exception management
       if (returnValue != null && returnValue instanceof String && ((String) returnValue).startsWith(EXCEPTION_TAG)) {
         SlimExceptionResult exceptionResult = new SlimExceptionResult(key, (String) returnValue);
         if (exceptionResult.isStopTestException()) {
           stopTestCalled = true;
+          stopSuiteCalled = PageData.SUITE_SETUP_NAME.equals(testContext.getPageToTest().getName());
         }
         if (exceptionResult.isStopSuiteException()) {
           stopTestCalled = stopSuiteCalled = true;
         }
         exceptionResult = a.getExpectation().evaluateException(exceptionResult);
         if (exceptionResult != null) {
-          testExceptionOccurred(a, exceptionResult);
+          if (!exceptionResult.isCatchException())
+            testExceptionOccurred(a, exceptionResult);
+          else
+            testAssertionVerified(a, exceptionResult.catchTestResult());
         }
       } else {
         //Normal results
@@ -168,8 +197,8 @@ public abstract class SlimTestSystem implements TestSystem {
     }
   }
 
-  protected void testOutputChunk(String output) {
-    testSystemListener.testOutputChunk(output);
+  protected void testOutputChunk(TestPage testPage, String output) {
+    testSystemListener.testOutputChunk(testPage, output);
   }
 
   protected void testStarted(TestPage testPage) {

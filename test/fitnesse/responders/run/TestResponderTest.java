@@ -2,19 +2,6 @@
 // Released under the terms of the CPL Common Public License version 1.0.
 package fitnesse.responders.run;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.util.Properties;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.NodeList;
-
 import fitnesse.FitNesseContext;
 import fitnesse.FitNesseVersion;
 import fitnesse.authentication.SecureOperation;
@@ -32,8 +19,27 @@ import fitnesse.util.Clock;
 import fitnesse.util.DateAlteringClock;
 import fitnesse.util.DateTimeUtil;
 import fitnesse.util.XmlUtil;
-import fitnesse.wiki.*;
+import fitnesse.wiki.PageData;
+import fitnesse.wiki.PathParser;
+import fitnesse.wiki.WikiPage;
+import fitnesse.wiki.WikiPagePath;
+import fitnesse.wiki.WikiPageProperty;
+import fitnesse.wiki.WikiPageUtil;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
 import util.FileUtil;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.Properties;
+import java.util.TimeZone;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static fitnesse.responders.run.TestResponderTest.XmlTestUtilities.assertCounts;
 import static fitnesse.responders.run.TestResponderTest.XmlTestUtilities.getXmlDocumentFromResults;
@@ -52,7 +58,7 @@ import static util.RegexTestCase.assertSubString;
 import static util.RegexTestCase.divWithIdAndContent;
 
 public class TestResponderTest {
-  private static final String TEST_TIME = "12/5/2008 01:19:00";
+  private static final String TEST_TIME = "2008-12-05T13:19:00Z";
   private WikiPage root;
   private MockRequest request;
   private SuiteResponder responder;
@@ -76,7 +82,7 @@ public class TestResponderTest {
     request = new MockRequest();
     responder = new TestResponder();
     properties.setProperty("FITNESSE_PORT", String.valueOf(context.port));
-    new DateAlteringClock(DateTimeUtil.getDateFromString(TEST_TIME)).advanceMillisOnEachQuery();
+    new DateAlteringClock(DateTimeUtil.getDateFromString(TEST_TIME), TimeZone.getTimeZone("CET")).advanceMillisOnEachQuery();
   }
 
   @After
@@ -320,7 +326,7 @@ public class TestResponderTest {
 
 
   private void ensureXmlResultFileDoesNotExist(TestSummary counts) throws IOException {
-    String resultsFileName = String.format("%s/TestPage/20081205011900_%d_%d_%d_%d.xml",
+    String resultsFileName = String.format("%s/TestPage/20081205141900_%d_%d_%d_%d.xml",
       context.getTestHistoryDirectory(), counts.getRight(), counts.getWrong(), counts.getIgnores(), counts.getExceptions());
     xmlResultsFile = new File(resultsFileName);
 
@@ -494,7 +500,7 @@ public class TestResponderTest {
     properties.set(PageData.PropertySUITES, "Test Page tags");
     testPage.commit(data);
 
-    WikiPagePath testPagePath = testPage.getPageCrawler().getFullPath();
+    WikiPagePath testPagePath = testPage.getFullPath();
     String resource = PathParser.render(testPagePath);
     request.setResource(resource);
 
@@ -520,7 +526,7 @@ public class TestResponderTest {
     WikiPageUtil.addPage(suitePage, PathParser.parse(PageData.SUITE_SETUP_NAME), outputWritingTable("Output of SuiteSetUp"));
     WikiPageUtil.addPage(suitePage, PathParser.parse("SetUp"), outputWritingTable("Output of SetUp"));
 
-    WikiPagePath testPagePath = testPage.getPageCrawler().getFullPath();
+    WikiPagePath testPagePath = testPage.getFullPath();
     String resource = PathParser.render(testPagePath);
     request.setResource(resource);
 
@@ -541,7 +547,7 @@ public class TestResponderTest {
     WikiPageUtil.addPage(suitePage, PathParser.parse(PageData.SUITE_TEARDOWN_NAME), outputWritingTable("Output of SuiteTearDown"));
     WikiPageUtil.addPage(suitePage, PathParser.parse("TearDown"), outputWritingTable("Output of TearDown"));
 
-    WikiPagePath testPagePath = testPage.getPageCrawler().getFullPath();
+    WikiPagePath testPagePath = testPage.getFullPath();
     String resource = PathParser.render(testPagePath);
     request.setResource(resource);
 
@@ -564,7 +570,7 @@ public class TestResponderTest {
     WikiPageUtil.addPage(suitePage, PathParser.parse(PageData.SUITE_TEARDOWN_NAME), outputWritingTable("Output of SuiteTearDown"));
     WikiPageUtil.addPage(suitePage, PathParser.parse("TearDown"), outputWritingTable("Output of TearDown"));
 
-    WikiPagePath testPagePath = testPage.getPageCrawler().getFullPath();
+    WikiPagePath testPagePath = testPage.getFullPath();
     String resource = PathParser.render(testPagePath);
     request.setResource(resource);
 
@@ -618,7 +624,7 @@ public class TestResponderTest {
     WikiPage suitePage = WikiPageUtil.addPage(root, PathParser.parse("TestSuite"), classpathWidgets());
     WikiPage testPage = WikiPageUtil.addPage(suitePage, PathParser.parse("TestPage"), outputWritingTable("Output of TestPage"));
 
-    WikiPagePath testPagePath = testPage.getPageCrawler().getFullPath();
+    WikiPagePath testPagePath = testPage.getFullPath();
     String resource = PathParser.render(testPagePath);
     request.setResource(resource);
     request.addInput("format", "xml");

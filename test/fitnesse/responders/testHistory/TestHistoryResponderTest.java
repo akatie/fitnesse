@@ -1,12 +1,17 @@
 package fitnesse.responders.testHistory;
 
-import static fitnesse.reporting.history.PageHistory.BarGraph;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static util.RegexTestCase.assertDoesntHaveRegexp;
-import static util.RegexTestCase.assertHasRegexp;
+import fitnesse.FitNesseContext;
+import fitnesse.http.MockRequest;
+import fitnesse.http.SimpleResponse;
+import fitnesse.reporting.history.PageHistory;
+import fitnesse.reporting.history.TestHistory;
+import fitnesse.reporting.history.TestResultRecord;
+import fitnesse.testsystems.TestSummary;
+import fitnesse.testutil.FitNesseUtil;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import util.FileUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -15,23 +20,17 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Set;
 
-import fitnesse.reporting.history.PageHistory;
-import fitnesse.reporting.history.TestHistory;
-import fitnesse.reporting.history.TestResultRecord;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import fitnesse.FitNesseContext;
-import fitnesse.http.MockRequest;
-import fitnesse.http.SimpleResponse;
-import fitnesse.testsystems.TestSummary;
-import fitnesse.testutil.FitNesseUtil;
-import util.FileUtil;
+import static fitnesse.reporting.history.PageHistory.BarGraph;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static util.RegexTestCase.assertDoesntHaveRegexp;
+import static util.RegexTestCase.assertHasRegexp;
 
 public class TestHistoryResponderTest {
   private File resultsDirectory;
-  private SimpleDateFormat dateFormat = new SimpleDateFormat(PageHistory.TEST_RESULT_FILE_DATE_PATTERN);
+  private SimpleDateFormat dateFormat = PageHistory.getDateFormat();
   private TestHistoryResponder responder;
   private SimpleResponse response;
   private FitNesseContext context;
@@ -47,6 +46,10 @@ public class TestHistoryResponderTest {
 
   private void makeResponse() throws Exception {
     response = (SimpleResponse) responder.makeResponse(context, new MockRequest());
+  }
+
+  private void makeResponse(String page) throws Exception {
+    response = (SimpleResponse) responder.makeResponse(context, new MockRequest(page));
   }
 
   private void removeResultsDirectory() throws IOException {
@@ -117,10 +120,13 @@ public class TestHistoryResponderTest {
     addPageDirectoryWithOneResult("ParentOne.PageOne", "20090418123103_1_2_3_4");
     addPageDirectoryWithOneResult("ParentOne.PageTwo", "20090418123103_1_2_3_4");
     addPageDirectoryWithOneResult("ParentTwo.PageThree", "20090418123103_1_2_3_4");
+    addPageDirectoryWithOneResult("ParentOnePager.PageOne", "20090418123103_1_2_3_4");
+    addPageDirectoryWithOneResult("ParentOne", "20090418123103_1_2_3_4");
 
     TestHistory history = new TestHistory(resultsDirectory, "ParentOne");
     Set<String> pageNames = history.getPageNames();
-    assertEquals(2, pageNames.size());
+    assertEquals(3, pageNames.size());
+    assertTrue(pageNames.contains("ParentOne"));
     assertTrue(pageNames.contains("ParentOne.PageOne"));
     assertTrue(pageNames.contains("ParentOne.PageTwo"));
   }
@@ -281,7 +287,7 @@ public class TestHistoryResponderTest {
     File pageDirectory = addPageDirectory("SomePage");
     addTestResult(pageDirectory, "20090418123103_1_2_3_4");
     addTestResult(pageDirectory, "20090419123103_1_0_0_0");
-    makeResponse();
+    makeResponse("SomePage");
     assertHasRegexp("SomePage", response.getContent());
     assertHasRegexp("<td class=\"pass\">1</td>", response.getContent());
     assertHasRegexp("<td class=\"fail\">1</td>", response.getContent());

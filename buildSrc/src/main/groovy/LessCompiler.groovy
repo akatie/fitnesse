@@ -4,6 +4,7 @@ class LessCompiler extends JavaExec {
   @InputDirectory
   def inputDir
 
+  @Input
   def mainLessFile
 
   @OutputFile
@@ -12,7 +13,6 @@ class LessCompiler extends JavaExec {
   @TaskAction
   public void exec() {
     inputDir.mkdirs()
-    main "org.mozilla.javascript.tools.shell.Main"
     args "extra/lesscss/less-rhino-1.7.0.js", new File(inputDir, mainLessFile)
     standardOutput = cssFile.newOutputStream()
     super.exec()

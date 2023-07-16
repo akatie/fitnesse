@@ -1,8 +1,5 @@
 package fitnesse;
 
-import java.io.IOException;
-import java.util.Properties;
-
 import fitnesse.authentication.Authenticator;
 import fitnesse.components.ComponentFactory;
 import fitnesse.components.Logger;
@@ -15,16 +12,33 @@ import fitnesse.testrunner.MultipleTestSystemFactory;
 import fitnesse.testsystems.TestSystemListener;
 import fitnesse.testsystems.slim.CustomComparatorRegistry;
 import fitnesse.testsystems.slim.tables.SlimTableFactory;
+import fitnesse.util.ClassUtils;
 import fitnesse.wiki.RecentChanges;
 import fitnesse.wiki.RecentChangesWikiPage;
+import fitnesse.wiki.SystemVariableSource;
 import fitnesse.wiki.WikiPageFactory;
 import fitnesse.wiki.WikiPageFactoryRegistry;
 import fitnesse.wiki.fs.FileSystemPageFactory;
 import fitnesse.wiki.fs.VersionsController;
 import fitnesse.wiki.fs.ZipFileVersionsController;
+import fitnesse.wikitext.MarkUpSystems;
 import fitnesse.wikitext.parser.SymbolProvider;
+import fitnesse.wikitext.parser.decorator.SlimTableDefaultColoring;
 
-import static fitnesse.ConfigurationParameter.*;
+import java.io.IOException;
+import java.util.Properties;
+
+import static fitnesse.ConfigurationParameter.COMMAND;
+import static fitnesse.ConfigurationParameter.CONFIG_FILE;
+import static fitnesse.ConfigurationParameter.CONTEXT_ROOT;
+import static fitnesse.ConfigurationParameter.CREDENTIALS;
+import static fitnesse.ConfigurationParameter.LOG_DIRECTORY;
+import static fitnesse.ConfigurationParameter.RECENT_CHANGES_CLASS;
+import static fitnesse.ConfigurationParameter.ROOT_DIRECTORY;
+import static fitnesse.ConfigurationParameter.THEME;
+import static fitnesse.ConfigurationParameter.VERSIONS_CONTROLLER_CLASS;
+import static fitnesse.ConfigurationParameter.VERSIONS_CONTROLLER_DAYS;
+import static fitnesse.ConfigurationParameter.WIKI_PAGE_FACTORY_CLASS;
 
 /**
  * Set up a context for running a FitNesse Instance.
@@ -41,12 +55,15 @@ public class ContextConfigurator {
   private static final int DEFAULT_COMMAND_PORT = 9123;
   public static final int DEFAULT_PORT = 80;
   public static final String DEFAULT_CONFIG_FILE = "plugins.properties";
+  public static final String DEFAULT_THEME = "bootstrap";
+  public static final int DEFAULT_MAXIMUM_WORKERS = 100;
 
   /** Some properties are stored in typed fields: */
   private WikiPageFactory wikiPageFactory;
   private Integer port;
   private String rootPath = DEFAULT_PATH;
   private String rootDirectoryName = DEFAULT_ROOT;
+  private Integer maximumWorkers = DEFAULT_MAXIMUM_WORKERS;
   private String contextRoot;
   private Logger logger;
   private Authenticator authenticator;
@@ -55,6 +72,7 @@ public class ContextConfigurator {
   /** Others as name-value pairs: */
   private final Properties properties = new Properties();
   private TestSystemListener testSystemListener;
+  private ClassLoader classLoader;
 
   private ContextConfigurator() {
   }
@@ -66,6 +84,7 @@ public class ContextConfigurator {
   public static ContextConfigurator systemDefaults() {
     return empty()
       .withRootPath(DEFAULT_PATH)
+      .withClassLoader(ClassUtils.getClassLoader())
       .withParameter(ROOT_DIRECTORY, DEFAULT_ROOT)
       .withParameter(CONTEXT_ROOT, DEFAULT_CONTEXT_ROOT)
       .withParameter(VERSIONS_CONTROLLER_DAYS, Integer.toString(DEFAULT_VERSION_DAYS))
@@ -85,7 +104,12 @@ public class ContextConfigurator {
   }
 
   public FitNesseContext makeFitNesseContext() throws IOException, PluginException {
-    ComponentFactory componentFactory = new ComponentFactory(properties);
+
+    // BIG WARNING: We're setting a static variable here!
+    ClassUtils.setClassLoader(classLoader);
+    Thread.currentThread().setContextClassLoader(classLoader);
+
+    ComponentFactory componentFactory = new ComponentFactory(properties, classLoader);
 
     if (port == null) {
       port = getPort();
@@ -96,7 +120,7 @@ public class ContextConfigurator {
     updateFitNesseProperties(version);
 
     if (wikiPageFactory == null) {
-      wikiPageFactory = (WikiPageFactory) componentFactory.createComponent(WIKI_PAGE_FACTORY_CLASS, FileSystemPageFactory.class);
+      wikiPageFactory = componentFactory.createComponent(WIKI_PAGE_FACTORY_CLASS, FileSystemPageFactory.class);
     }
 
     if (versionsController == null) {
@@ -106,7 +130,7 @@ public class ContextConfigurator {
       recentChanges = componentFactory.createComponent(RECENT_CHANGES_CLASS, RecentChangesWikiPage.class);
     }
 
-    PluginsLoader pluginsLoader = new PluginsLoader(componentFactory);
+    PluginsLoader pluginsLoader = new PluginsLoader(componentFactory, classLoader);
 
     if (logger == null) {
       logger = pluginsLoader.makeLogger(get(LOG_DIRECTORY));
@@ -115,10 +139,20 @@ public class ContextConfigurator {
       authenticator = pluginsLoader.makeAuthenticator(get(CREDENTIALS));
     }
 
+    SystemVariableSource variableSource = new SystemVariableSource(properties);
+
+    String theme = variableSource.getProperty(THEME.getKey());
+    if (theme == null) {
+      theme = pluginsLoader.getDefaultTheme();
+      if (theme == null) {
+        theme = DEFAULT_THEME;
+      }
+    }
+
     SlimTableFactory slimTableFactory = new SlimTableFactory();
     CustomComparatorRegistry customComparatorRegistry = new CustomComparatorRegistry();
 
-    MultipleTestSystemFactory testSystemFactory = new MultipleTestSystemFactory(slimTableFactory, customComparatorRegistry);
+    MultipleTestSystemFactory testSystemFactory = new MultipleTestSystemFactory(slimTableFactory, customComparatorRegistry, classLoader);
 
     FormatterFactory formatterFactory = new FormatterFactory(componentFactory);
 
@@ -126,6 +160,7 @@ public class ContextConfigurator {
           wikiPageFactory,
           rootPath,
           rootDirectoryName,
+          maximumWorkers,
           contextRoot,
           versionsController,
           recentChanges,
@@ -135,9 +170,15 @@ public class ContextConfigurator {
           testSystemFactory,
           testSystemListener,
           formatterFactory,
-          properties);
+          properties,
+          variableSource,
+          theme);
 
-    SymbolProvider symbolProvider = SymbolProvider.wikiParsingProvider;
+    SymbolProvider wikiParsingProvider = SymbolProvider.wikiParsingProvider;
+    SymbolProvider noLinksTableParsingProvider = SymbolProvider.noLinksTableParsingProvider;
+
+    SlimTableDefaultColoring.createInstanceIfNeeded(slimTableFactory);
+    SlimTableDefaultColoring.install();
 
     pluginsLoader.loadResponders(context.responderFactory);
 
@@ -148,9 +189,12 @@ public class ContextConfigurator {
     }
     pluginsLoader.loadTestSystems(testSystemFactory);
     pluginsLoader.loadFormatters(formatterFactory);
-    pluginsLoader.loadSymbolTypes(symbolProvider);
+    pluginsLoader.loadSymbolTypes(wikiParsingProvider);
+    pluginsLoader.loadSymbolTypes(noLinksTableParsingProvider);
     pluginsLoader.loadSlimTables(slimTableFactory);
     pluginsLoader.loadCustomComparators(customComparatorRegistry);
+    pluginsLoader.loadTestRunFactories(context.testRunFactoryRegistry);
+    pluginsLoader.loadMarkupSystems(MarkUpSystems.STORE);
 
     ContentFilter contentFilter = pluginsLoader.loadContentFilter();
 
@@ -226,6 +270,9 @@ public class ContextConfigurator {
       case PORT:
         port = Integer.parseInt(value);
         break;
+      case MAXIMUM_WORKERS:
+        maximumWorkers = Integer.parseInt(value);
+        break;
       default:
         properties.setProperty(parameter.getKey(), value);
         break;
@@ -263,6 +310,11 @@ public class ContextConfigurator {
     return this;
   }
 
+  public ContextConfigurator withClassLoader(ClassLoader classLoader) {
+    this.classLoader = classLoader;
+    return this;
+  }
+
   public String get(ConfigurationParameter parameter) {
     switch(parameter) {
       case ROOT_PATH:
@@ -273,6 +325,8 @@ public class ContextConfigurator {
         return contextRoot;
       case PORT:
         return String.valueOf(port);
+      case MAXIMUM_WORKERS:
+        return String.valueOf(maximumWorkers);
       default:
         return properties.getProperty(parameter.getKey());
     }

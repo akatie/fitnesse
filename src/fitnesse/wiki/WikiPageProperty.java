@@ -2,15 +2,14 @@
 // Released under the terms of the CPL Common Public License version 1.0.
 package fitnesse.wiki;
 
+import fitnesse.util.Clock;
+import org.apache.commons.lang3.StringUtils;
+
 import java.io.Serializable;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
-
-import org.apache.commons.lang.StringUtils;
-
-import fitnesse.util.Clock;
 
 public class WikiPageProperty implements Serializable {
   private static final long serialVersionUID = 1L;
@@ -25,6 +24,7 @@ public class WikiPageProperty implements Serializable {
   public static final String WHERE_USED = "WhereUsed";
   public static final String REFACTOR = "Refactor";
   public static final String PROPERTIES = "Properties";
+  public static final String VARIABLES_SCOPE = "VariablesScope";
   public static final String VERSIONS = "Versions";
   public static final String EDIT = "Edit";
   public static final String SUITES = "Suites";

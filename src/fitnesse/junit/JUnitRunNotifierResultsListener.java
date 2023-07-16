@@ -1,7 +1,11 @@
 package fitnesse.junit;
 
 import java.io.Closeable;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
+import fitnesse.slim.SlimException;
+import fitnesse.slim.SlimServer;
 import fitnesse.testrunner.TestsRunnerListener;
 import fitnesse.testsystems.Assertion;
 import fitnesse.testsystems.ExceptionResult;
@@ -11,12 +15,16 @@ import fitnesse.testsystems.TestResult;
 import fitnesse.testsystems.TestSummary;
 import fitnesse.testsystems.TestSystem;
 import fitnesse.testsystems.TestSystemListener;
+import fitnesse.testsystems.slim.results.SlimExceptionResult;
 import org.junit.runner.Description;
 import org.junit.runner.notification.Failure;
 import org.junit.runner.notification.RunNotifier;
 
+import static fitnesse.testsystems.ExecutionResult.getExecutionResult;
+
 public class JUnitRunNotifierResultsListener
         implements TestSystemListener, TestsRunnerListener, Closeable {
+  private static final Logger LOG = Logger.getLogger(JUnitRunNotifierResultsListener.class.getName());
 
   private final Class<?> mainClass;
   private final RunNotifier notifier;
@@ -51,18 +59,23 @@ public class JUnitRunNotifierResultsListener
   public void testComplete(TestPage test, TestSummary testSummary) {
     increaseCompletedTests();
     Description description = descriptionFor(test);
+
+
     if (firstFailure != null) {
       notifier.fireTestFailure(new Failure(description, firstFailure));
     } else if (testSummary.getExceptions() > 0) {
       notifier.fireTestFailure(new Failure(description, new Exception("Exception occurred on page " + test.getFullPath())));
     } else if (testSummary.getWrong() > 0) {
       notifier.fireTestFailure(new Failure(description, new AssertionError("Test failures occurred on page " + test.getFullPath())));
+    } else if (getExecutionResult(testSummary) == ExecutionResult.IGNORE) {
+      notifier.fireTestIgnored(description);
+      return;
     }
     notifier.fireTestFinished(description);
   }
 
   @Override
-  public void testOutputChunk(String output) {
+  public void testOutputChunk(TestPage testPage, String output) {
   }
 
   @Override
@@ -77,7 +90,11 @@ public class JUnitRunNotifierResultsListener
 
   @Override
   public void testExceptionOccurred(Assertion assertion, ExceptionResult exceptionResult) {
-    firstFailure(exceptionResult.getExecutionResult(), exceptionResult.getMessage());
+    String message = exceptionResult.getMessage();
+    if (message == null && exceptionResult instanceof SlimExceptionResult) {
+      message = extractMessageFromSlimException((SlimExceptionResult) exceptionResult);
+    }
+    firstFailure(exceptionResult.getExecutionResult(), message);
   }
 
   @Override
@@ -91,13 +108,31 @@ public class JUnitRunNotifierResultsListener
 
   @Override
   public void close() {
-    if (completedTests != totalNumberOfTests) {
+    if (completedTests < totalNumberOfTests) {
       String msg = String.format(
               "Not all tests executed. Completed %s of %s tests.",
               completedTests, totalNumberOfTests);
       Exception e = new Exception(msg);
       notifier.fireTestFailure(new Failure(suiteDescription(), e));
     }
+    if (completedTests > totalNumberOfTests) {
+      if (LOG.isLoggable(Level.WARNING)) {
+        String msg = String.format(
+          "Too many tests completed. Completed %s of %s tests.",
+          completedTests, totalNumberOfTests);
+        LOG.log(Level.WARNING, msg);
+      }
+    }
+  }
+
+  protected String extractMessageFromSlimException(SlimExceptionResult slimExceptionResult) {
+    String slimExceptionMessage = slimExceptionResult.getException();
+    String result = slimExceptionMessage.replace(SlimServer.EXCEPTION_TAG, "");
+    int index = result.indexOf("\n\tat fitnesse.slim.MethodExecutor.findAndInvoke(");
+    if (index > 0) {
+      result = result.substring(0, index);
+    }
+    return result;
   }
 
   protected void notifyOfTestSystemException(String testSystemName, Throwable cause) {
@@ -134,6 +169,8 @@ public class JUnitRunNotifierResultsListener
     }
     if (executionResult == ExecutionResult.ERROR) {
       firstFailure = new Exception(message);
+    } else if (message == null) {
+      firstFailure = new AssertionError();
     } else {
       firstFailure = new AssertionError(message);
     }

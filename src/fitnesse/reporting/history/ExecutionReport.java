@@ -1,24 +1,24 @@
 package fitnesse.reporting.history;
 
-import java.io.IOException;
-import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-
-import fitnesse.testsystems.ExecutionResult;
-import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.builder.HashCodeBuilder;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-
 import fitnesse.FitNesseVersion;
+import fitnesse.testsystems.ExecutionResult;
 import fitnesse.testsystems.TestSummary;
 import fitnesse.util.DateTimeUtil;
 import fitnesse.util.TimeMeasurement;
 import fitnesse.util.XmlUtil;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.builder.HashCodeBuilder;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 import org.xml.sax.SAXException;
+
+import java.io.IOException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
 
 import static java.lang.String.format;
 
@@ -192,6 +192,15 @@ public abstract class ExecutionReport {
 
   public void setDate(Date date) {
     this.date = new Date(date.getTime());
+  }
+
+  public String getDateString() {
+    return DateTimeUtil.formatDate(date);
+  }
+
+  public String getResultDate() {
+    SimpleDateFormat pageHistoryFormatter = PageHistory.getDateFormat();
+    return pageHistoryFormatter.format(date);
   }
 
   public boolean hasRunTimes() {

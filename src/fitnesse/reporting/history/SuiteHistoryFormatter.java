@@ -1,21 +1,29 @@
 package fitnesse.reporting.history;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.io.Writer;
-import java.util.List;
-import org.apache.velocity.Template;
-import org.apache.velocity.VelocityContext;
-import org.apache.velocity.app.VelocityEngine;
-
 import fitnesse.FitNesseContext;
 import fitnesse.reporting.BaseFormatter;
 import fitnesse.testrunner.WikiTestPageUtil;
-import fitnesse.testsystems.*;
+import fitnesse.testsystems.Assertion;
+import fitnesse.testsystems.ExceptionResult;
+import fitnesse.testsystems.ExecutionLogListener;
+import fitnesse.testsystems.ExecutionResult;
+import fitnesse.testsystems.TestPage;
+import fitnesse.testsystems.TestResult;
+import fitnesse.testsystems.TestSummary;
+import fitnesse.testsystems.TestSystem;
 import fitnesse.util.TimeMeasurement;
 import fitnesse.wiki.PageType;
 import fitnesse.wiki.WikiPage;
+import org.apache.velocity.Template;
+import org.apache.velocity.VelocityContext;
+import org.apache.velocity.app.VelocityEngine;
 import util.FileUtil;
+
+import java.io.Closeable;
+import java.io.IOException;
+import java.io.Writer;
+import java.util.Date;
+import java.util.List;
 
 public class SuiteHistoryFormatter extends BaseFormatter implements ExecutionLogListener, Closeable {
   private final SuiteExecutionReport suiteExecutionReport;
@@ -30,14 +38,16 @@ public class SuiteHistoryFormatter extends BaseFormatter implements ExecutionLog
     super(page);
     this.context = context;
     writerFactory = source;
-    suiteExecutionReport = new SuiteExecutionReport(context.version, getPage().getPageCrawler().getFullPath().toString());
+    suiteExecutionReport = new SuiteExecutionReport(context.version, getPage().getFullPath().toString());
     totalTimeMeasurement = new TimeMeasurement().start();
   }
 
   @Override
   public void testSystemStarted(TestSystem testSystem) {
-    if (suiteTime == null)
+    if (suiteTime == null) {
       suiteTime = new TimeMeasurement().start();
+      getSuiteExecutionReport().setDate(new Date(suiteTime.startedAt()));
+    }
   }
 
   @Override
@@ -61,9 +71,9 @@ public class SuiteHistoryFormatter extends BaseFormatter implements ExecutionLog
   }
 
   @Override
-  public void testOutputChunk(String output) {
+  public void testOutputChunk(TestPage testPage, String output) {
     if (testHistoryFormatter != null) {
-      testHistoryFormatter.testOutputChunk(output);
+      testHistoryFormatter.testOutputChunk(testPage, output);
     }
   }
 

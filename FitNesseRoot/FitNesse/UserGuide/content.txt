@@ -17,7 +17,8 @@
  * [[Quick Reference Guide][>QuickReferenceGuide]]
  * [[Full Reference Guide][<FitNesse.FullReferenceGuide]] (takes some time to load)
 
-!1 Introduction !anchor introduction
+!anchor introduction
+!1 Introduction
 
 FitNesse is a tool for specifying and verifying application acceptance criteria (requirements). It acts as a bridge between the different stakeholders (disciplines) in a software delivery process. Its wiki server makes it easy to document the software. Its test-execution capabilities allow you to verify the documentation against the software, ensuring the documentation remains up to date and the software is not facing regression.
 
@@ -34,7 +35,7 @@ FitNesse started as an HTML and [[wiki][http://wiki.org/wiki.cgi?WhatIsWiki]] "f
 
 !*** From the [[Fit website][http://fit.c2.com/]]:
 
-Great software requires collaboration and communication.Fitis a tool for enhancing collaboration in software development. It's an invaluable way to collaborate on complicated problems -and get them right- early in development.
+Great software requires collaboration and communication.Fit is a tool for enhancing collaboration in software development. It's an invaluable way to collaborate on complicated problems -and get them right- early in development.
 
 Fit allows customers, testers, and programmers to learn what their software ''should'' do and what it ''does'' do. It automatically compares customers' expectations to actual results.
 

@@ -5,12 +5,14 @@ import fitnesse.slim.SlimServer;
 import fitnesse.slim.instructions.Instruction;
 import fitnesse.slim.instructions.InstructionExecutor;
 import fitnesse.slim.instructions.InstructionResult;
+import fitnesse.testrunner.WikiTestPage;
 import fitnesse.testsystems.*;
 import fitnesse.testsystems.slim.results.SlimExceptionResult;
 import fitnesse.testsystems.slim.results.SlimTestResult;
 import fitnesse.testsystems.slim.tables.SlimAssertion;
 import fitnesse.testsystems.slim.tables.SlimExpectation;
 import fitnesse.testsystems.slim.tables.SlimTable;
+import fitnesse.wiki.WikiPageDummy;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -22,7 +24,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
 /**
- * See also FitNesseRoot/FitNesse/SuiteAcceptanceTests/SuiteSlimTests, StopSuite and StopTest in particular
+ * See also FitNesseRoot/FitNesse/SuiteAcceptanceTests/SuiteSlimTests, StopSuite, StopTestInSuiteSetUp and StopTest in particular
  */
 public class SlimTestSystemTableProcessingTest {
 
@@ -32,6 +34,7 @@ public class SlimTestSystemTableProcessingTest {
   @Before
   public void setup() {
     slimTestSystem.addTestSystemListener(listener);
+    slimTestSystem.newTestPage();
   }
 
   @Test
@@ -49,6 +52,24 @@ public class SlimTestSystemTableProcessingTest {
     slimTestSystem.processTable(table("Table2"), false);
 
     assertTestRecords(error(exceptionId), pass("Table2"));
+  }
+
+  @Test
+  public void tableFollowingIgnoreScriptTestExceptionExecuted() throws TestExecutionException {
+    String exceptionId = SlimServer.EXCEPTION_IGNORE_SCRIPT_TEST_TAG + "table1 with random ignore exception";
+    slimTestSystem.processTable(table(exceptionId), false);
+    slimTestSystem.processTable(table("Table2"), false);
+
+    assertTestRecords(ignore(exceptionId), pass("Table2"));
+  }
+
+  @Test
+  public void tableFollowingIgnoreAllTestsExceptionIgnored() throws TestExecutionException {
+    String exceptionId = SlimServer.EXCEPTION_IGNORE_ALL_TESTS_TAG + "table1 with random ignore exception";
+    slimTestSystem.processTable(table(exceptionId), false);
+    slimTestSystem.processTable(table("Table2"), false);
+
+    assertTestRecords(ignore(exceptionId), ignore("Table2"));
   }
 
   @Test
@@ -97,6 +118,18 @@ public class SlimTestSystemTableProcessingTest {
     slimTestSystem.processTable(tearDownTable("NextPageTearDown"), false);
 
     assertTestRecords(error(exceptionId), ignore("NextPage"), ignore("NextPageTearDown"));
+  }
+
+  @Test
+  public void nextPageAndItsTeardownShouldBeSkippedOnStopTestInSuiteSetUp() throws TestExecutionException {
+    String exceptionId = SlimServer.EXCEPTION_STOP_TEST_TAG + "StopTestException";
+    slimTestSystem.newTestPage("SuiteSetUp");
+    slimTestSystem.processTable(table(exceptionId), false);
+    slimTestSystem.newTestPage();
+    slimTestSystem.processTable(table("NextPage"), false);
+    slimTestSystem.processTable(tearDownTable("NextPageTearDown"), false);
+
+    assertTestRecords(fail(exceptionId), ignore("NextPage"), ignore("NextPageTearDown"));
   }
 
   @Test
@@ -176,7 +209,7 @@ public class SlimTestSystemTableProcessingTest {
     }
 
     @Override
-    public void testOutputChunk(String output) {
+    public void testOutputChunk(TestPage testPage, String output) {
       throw new UnsupportedOperationException();
     }
 
@@ -205,6 +238,7 @@ public class SlimTestSystemTableProcessingTest {
   private static class DummySlimTable extends SlimTable {
 
     private final List<SlimAssertion> assertions;
+    private boolean tearDown;
 
     public DummySlimTable(String assertionId) {
       super(null, null, null);
@@ -212,6 +246,15 @@ public class SlimTestSystemTableProcessingTest {
           new SlimAssertion(new DummyInstruction(assertionId),
               new IgnoreOnNullPassOtherwiseSlimExpectation())
       );
+    }
+
+    public void setTearDown(boolean tearDown) {
+      this.tearDown = tearDown;
+    }
+
+    @Override
+    public boolean isTearDown() {
+      return tearDown;
     }
 
     @Override
@@ -255,7 +298,11 @@ public class SlimTestSystemTableProcessingTest {
     }
 
     public void newTestPage() {
-      stopTestCalled = false;
+      initializeTest(new WikiTestPage(new WikiPageDummy()));
+    }
+
+    public void newTestPage(String pageName) {
+      initializeTest(new WikiTestPage(new WikiPageDummy(pageName, "", null)));
     }
   }
 
@@ -293,7 +340,7 @@ public class SlimTestSystemTableProcessingTest {
   private static class IgnoreOnNullPassOtherwiseSlimExpectation implements SlimExpectation {
     @Override
     public TestResult evaluateExpectation(Object returnValues) {
-      return new SlimTestResult(null == returnValues ? ExecutionResult.IGNORE : ExecutionResult.PASS);
+      return new SlimTestResult((null == returnValues) || (returnValues.toString().contains("IGNORE_SCRIPT_TEST")) ? ExecutionResult.IGNORE : ExecutionResult.PASS);
     }
 
     @Override

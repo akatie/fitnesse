@@ -1,16 +1,15 @@
 package fitnesse.responders.refactoring;
 
-import fitnesse.wiki.refactoring.ContentReplacingSearchObserver;
-import fitnesse.wiki.search.PageFinder;
-import fitnesse.wiki.search.RegularExpressionWikiPageFinder;
 import fitnesse.components.TraversalListener;
 import fitnesse.responders.search.ResultResponder;
 import fitnesse.wiki.WikiPage;
+import fitnesse.wiki.refactoring.ContentReplacingSearchObserver;
+import fitnesse.wiki.refactoring.MethodReplacingSearchObserver;
+import fitnesse.wiki.search.MethodWikiPageFinder;
+import fitnesse.wiki.search.PageFinder;
+import fitnesse.wiki.search.RegularExpressionWikiPageFinder;
 
-public class SearchReplaceResponder extends ResultResponder implements TraversalListener<WikiPage> {
-
-  private TraversalListener<? super WikiPage> contentReplaceObserver;
-  private TraversalListener<? super WikiPage> webOutputObserver;
+public class SearchReplaceResponder extends ResultResponder {
 
   protected String getPageFooterInfo(int hits) {
     return String.format("Replaced %d matches for your search.", hits);
@@ -24,17 +23,30 @@ public class SearchReplaceResponder extends ResultResponder implements Traversal
   @Override
   protected String getTitle() {
     return String.format("Replacing matching content \"%s\" with content \"%s\"",
-        getSearchString(), getReplacementString());
+      getSearchString(), getReplacementString());
   }
 
   @Override
-  protected PageFinder getPageFinder(TraversalListener<WikiPage> observer) {
-    webOutputObserver = observer;
+  protected PageFinder getPageFinder(TraversalListener<WikiPage> webOutputObserver) {
     String searchString = getSearchString();
     String replacementString = getReplacementString();
 
-    contentReplaceObserver = new ContentReplacingSearchObserver(searchString, replacementString);
-    return new RegularExpressionWikiPageFinder(searchString, this);
+    if (isMethodReplace()) {
+      MethodReplacingSearchObserver methodReplaceObserver =
+        new MethodReplacingSearchObserver(searchString, replacementString);
+
+      return new MethodWikiPageFinder(searchString,
+        new SearchReplaceTraverser(methodReplaceObserver, webOutputObserver));
+    } else {
+      ContentReplacingSearchObserver contentReplaceObserver =
+        new ContentReplacingSearchObserver(searchString, replacementString);
+      return new RegularExpressionWikiPageFinder(searchString,
+        new SearchReplaceTraverser(contentReplaceObserver, webOutputObserver));
+    }
+  }
+
+  private boolean isMethodReplace() {
+    return request.hasInput("isMethodReplace");
   }
 
   private String getReplacementString() {
@@ -44,10 +56,6 @@ public class SearchReplaceResponder extends ResultResponder implements Traversal
   private String getSearchString() {
     return request.getInput("searchString");
   }
-
-  @Override
-  public void process(WikiPage page) {
-    contentReplaceObserver.process(page);
-    webOutputObserver.process(page);
-  }
 }
+
+
