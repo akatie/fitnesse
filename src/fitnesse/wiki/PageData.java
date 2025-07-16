@@ -2,10 +2,10 @@
 // Released under the terms of the CPL Common Public License version 1.0.
 package fitnesse.wiki;
 
-import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.Serializable;
+import java.util.stream.Stream;
 
 import static fitnesse.wiki.PageType.*;
 
@@ -38,6 +38,12 @@ public class PageData implements ReadOnlyPageData, Serializable {
   @Deprecated
   public static final String PropertySUITES = WikiPageProperty.SUITES;
 
+  /* Wiki page content is saved always with LineFeed as separor even on Windows
+   * see function set Content
+   * To simplify writing test cases the below is defined
+   */
+  public static final String PAGE_LINE_SEPARATOR ="\n";
+  
   public static final String PAGE_TYPE_ATTRIBUTE = "PageType";
   public static final String[] PAGE_TYPE_ATTRIBUTES = { STATIC.toString(),
       TEST.toString(), SUITE.toString() };
@@ -49,7 +55,11 @@ public class PageData implements ReadOnlyPageData, Serializable {
   public static final String[] NAVIGATION_ATTRIBUTES = {
       WikiPageProperty.RECENT_CHANGES, WikiPageProperty.FILES, WikiPageProperty.SEARCH };
 
-  public static final String[] NON_SECURITY_ATTRIBUTES = ArrayUtils.addAll(ACTION_ATTRIBUTES, NAVIGATION_ATTRIBUTES);
+  public static final String[] DISABLE_ATTRIBUTES = { WikiPageProperty.DISABLE_TESTHISTORY };
+
+  public static final String[] NON_SECURITY_ATTRIBUTES = Stream
+      .of(ACTION_ATTRIBUTES, NAVIGATION_ATTRIBUTES, DISABLE_ATTRIBUTES)
+      .flatMap(Stream::of).toArray(String[]::new);
 
   @Deprecated
   public static final String PropertySECURE_READ = WikiPageProperty.SECURE_READ;

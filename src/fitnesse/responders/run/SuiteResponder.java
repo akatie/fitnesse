@@ -44,6 +44,7 @@ import fitnesse.wiki.PathParser;
 import fitnesse.wiki.WikiImportProperty;
 import fitnesse.wiki.WikiPage;
 import fitnesse.wiki.WikiPagePath;
+import fitnesse.wiki.WikiPageProperty;
 import fitnesse.wiki.WikiPageUtil;
 import org.apache.commons.lang3.StringUtils;
 import util.FileUtil;
@@ -262,7 +263,8 @@ public class SuiteResponder extends ChunkingResponder implements SecureResponder
   }
 
   private boolean withSuiteHistoryFormatter() {
-    return !request.hasInput("nohistory");
+    return !request.hasInput("nohistory")
+        && !page.getData().hasAttribute(WikiPageProperty.DISABLE_TESTHISTORY);
   }
 
   protected void addHistoryFormatter(MultipleTestsRunner runner) {
@@ -295,7 +297,12 @@ public class SuiteResponder extends ChunkingResponder implements SecureResponder
     PageCrawler pageCrawler = page.getPageCrawler();
     WikiPagePath fullPath = pageCrawler.getFullPath();
     String fullPathName = PathParser.render(fullPath);
-    return "RerunLastFailures_"+fullPathName.replace(".","-");
+    if (fullPathName.startsWith("RerunLastFailures_")) {
+      String newFullPathName = fullPathName.replace(".", "-");
+      return newFullPathName;
+    } else {
+      return "RerunLastFailures_" + fullPathName.replace(".", "-");
+    }
   }
 
   protected String getTitle() {

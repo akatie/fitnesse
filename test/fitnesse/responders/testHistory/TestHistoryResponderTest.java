@@ -1,5 +1,6 @@
 package fitnesse.responders.testHistory;
 
+import fitnesse.ConfigurationParameter;
 import fitnesse.FitNesseContext;
 import fitnesse.http.MockRequest;
 import fitnesse.http.SimpleResponse;
@@ -27,6 +28,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static util.RegexTestCase.assertDoesntHaveRegexp;
 import static util.RegexTestCase.assertHasRegexp;
+import static util.RegexTestCase.assertNotSubString;
+import static util.RegexTestCase.assertSubString;
 
 public class TestHistoryResponderTest {
   private File resultsDirectory;
@@ -339,5 +342,73 @@ public class TestHistoryResponderTest {
     request.addInput("format", "xML");
     response = (SimpleResponse) responder.makeResponse(context, request);
     assertHasRegexp("text/xml", response.getContentType());
+  }
+  
+  @Test
+  public void shouldShowDefaultPurgeOptions() throws Exception {
+    MockRequest request = new MockRequest();
+    SimpleResponse response = (SimpleResponse) new TestHistoryResponder().makeResponse(context, request);
+    String html = response.getContent();
+    assertSubString("<a class=\"btn btn-outline-secondary\" href=\"?responder=purgeHistory&days=0\" onclick=\"purgeConfirmation(event)\">Purge all</a>", html);
+    assertSubString("<a class=\"btn btn-outline-secondary\" href=\"?responder=purgeHistory&days=7\" onclick=\"purgeConfirmation(event)\">Purge &gt; 7 days</a>", html);
+    assertSubString("<a class=\"btn btn-outline-secondary\" href=\"?responder=purgeHistory&days=30\" onclick=\"purgeConfirmation(event)\">Purge &gt; 30 days</a>", html);
+    assertSubString("<label for=\"purgeGlobal\"><input type=\"checkbox\" id=\"purgeGlobal\" />Purge global</label>", html);
+  }
+
+  @Test
+  public void shouldShowConfiguredPurgeOptions() throws Exception {
+    MockRequest request = new MockRequest();
+    context.getProperties().setProperty(ConfigurationParameter.PURGE_OPTIONS.getKey(), "30,60,90");
+    SimpleResponse response = (SimpleResponse) new TestHistoryResponder().makeResponse(context, request);
+    String html = response.getContent();
+    assertNotSubString("<a class=\"btn btn-outline-secondary\" href=\"?responder=purgeHistory&days=0\" onclick=\"purgeConfirmation(event)\">Purge all</a>", html);
+    assertSubString("<a class=\"btn btn-outline-secondary\" href=\"?responder=purgeHistory&days=30\" onclick=\"purgeConfirmation(event)\">Purge &gt; 30 days</a>", html);
+    assertSubString("<a class=\"btn btn-outline-secondary\" href=\"?responder=purgeHistory&days=60\" onclick=\"purgeConfirmation(event)\">Purge &gt; 60 days</a>", html);
+    assertSubString("<a class=\"btn btn-outline-secondary\" href=\"?responder=purgeHistory&days=90\" onclick=\"purgeConfirmation(event)\">Purge &gt; 90 days</a>", html);
+    assertSubString("<label for=\"purgeGlobal\"><input type=\"checkbox\" id=\"purgeGlobal\" />Purge global</label>", html);
+  }
+  
+  @Test
+  public void shouldShowNoPurgeOptions() throws Exception {
+    MockRequest request = new MockRequest();
+    context.getProperties().setProperty(ConfigurationParameter.PURGE_OPTIONS.getKey(), "");
+    SimpleResponse response = (SimpleResponse) new TestHistoryResponder().makeResponse(context, request);
+    String html = response.getContent();
+    assertNotSubString("<a class=\"btn btn-outline-secondary\" href=\"?responder=purgeHistory&days=0\" onclick=\"purgeConfirmation(event)\">Purge all</a>", html);
+    assertNotSubString("<a class=\"btn btn-outline-secondary\" href=\"?responder=purgeHistory&days=7\" onclick=\"purgeConfirmation(event)\">Purge &gt; 7 days</a>", html);
+    assertNotSubString("<label for=\"purgeGlobal\"><input type=\"checkbox\" id=\"purgeGlobal\" />Purge global</label>", html);
+  }
+
+  @Test
+  public void shouldShowLastNResultButtons() throws Exception {
+    MockRequest request = new MockRequest();
+    SimpleResponse resp  = (SimpleResponse) new TestHistoryResponder().makeResponse(context, request);
+    String html = resp.getContent();
+    assertSubString("?responder=testHistory&results=3", html);
+    assertSubString(">Last 3<", html);
+    assertSubString("?responder=testHistory&results=5", html);
+    assertSubString("?responder=testHistory&results=10", html);
+    assertSubString("?responder=testHistory&results=20", html);
+  }
+
+  @Test
+  public void shouldOfferTrimCheckboxWhenSuggestionExists() throws Exception {
+    addPageDirectoryWithOneResult("FitNesse.SuiteAcceptanceTests.DummyPage", "20090418123103_1_0_0_0");
+    makeResponse();                               
+    String html = response.getContent();
+    assertSubString("id=\"trimPath\"", html);
+    assertDoesntHaveRegexp("id=\"trimPath\"[^\n]+checked", html);
+    assertSubString("Trim page names", html);
+  }
+
+  @Test
+  public void shouldRenderTrimCheckboxCheckedWhenTrimIsApplied() throws Exception {
+    addPageDirectoryWithOneResult("FitNesse.SuiteAcceptanceTests.DummyPage", "20090418123103_1_0_0_0");
+    MockRequest req = new MockRequest();
+    req.addInput("trim", "FitNesse.SuiteAcceptanceTests.");
+    SimpleResponse resp = (SimpleResponse) new TestHistoryResponder().makeResponse(context, req);
+    String html = resp.getContent();
+    assertSubString("id=\"trimPath\"", html);
+    assertHasRegexp("id=\"trimPath\"[\\s\\S]*?checked", html);
   }
 }
